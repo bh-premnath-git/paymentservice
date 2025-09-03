@@ -4,7 +4,7 @@ uvicorn[standard]==0.32.1
 python-multipart==0.0.17
 
 # gRPC (runtime only)
-grpcio==1.69.0
+grpcio==1.74.0
 protobuf==6.31.1
 
 # Database (async)
