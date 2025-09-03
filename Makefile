@@ -15,13 +15,18 @@ help:
 	@echo "  make test      - Run tests"
 	@echo ""
 
-# Generate proto files dynamically
+# Generate protobuf files
 protos:
 	@echo " Generating proto files..."
-	@if command -v bash >/dev/null 2>&1; then \
-		chmod +x generate_protos.sh && ./generate_protos.sh; \
+	@if [ -f "./generate_protos.sh" ]; then \
+		echo "Found generate_protos.sh, running with bash..."; \
+		bash -c 'chmod +x generate_protos.sh && ./generate_protos.sh'; \
 	else \
-		generate_protos.bat; \
+		echo "Error: generate_protos.sh not found in current directory"; \
+		echo "Current directory: $$(pwd)"; \
+		echo "Contents:"; \
+		ls -la; \
+		exit 1; \
 	fi
 
 # Clean generated files and Docker artifacts
