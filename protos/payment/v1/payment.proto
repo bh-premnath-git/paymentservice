@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package payment.v1;
+
+service PaymentService {
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse);
+  rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
+  rpc ProcessPayment(ProcessPaymentRequest) returns (ProcessPaymentResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message CreatePaymentRequest {
+  string amount = 1;
+  string currency = 2;
+  string customer_id = 3;
+  string payment_method = 4;
+  map<string, string> metadata = 5;
+}
+
+message CreatePaymentResponse {
+  string payment_id = 1;
+  string status = 2;
+  string created_at = 3;
+}
+
+message GetPaymentRequest {
+  string payment_id = 1;
+}
+
+message GetPaymentResponse {
+  string payment_id = 1;
+  string amount = 2;
+  string currency = 3;
+  string status = 4;
+  string created_at = 5;
+}
+
+message ProcessPaymentRequest {
+  string payment_id = 1;
+  string action = 2; // capture, refund, cancel
+}
+
+message ProcessPaymentResponse {
+  string payment_id = 1;
+  string status = 2;
+  string processed_at = 3;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string timestamp = 2;
+}

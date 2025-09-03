@@ -1,0 +1,61 @@
+# Core FastAPI + async
+fastapi==0.115.4
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+
+# gRPC (runtime only)
+grpcio==1.69.0
+protobuf==6.31.1
+
+# Database (async)
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# HTTP clients
+httpx==0.28.1
+aiohttp==3.11.10
+
+# Payment providers
+stripe==11.2.0
+
+# Auth & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==43.0.3
+
+# Configuration & validation
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Logging & monitoring
+structlog==24.4.0
+rich==13.9.4
+
+# Retry & resilience
+tenacity==9.0.0
+
+# Utilities
+python-dateutil==2.9.0
+pytz==2024.2
+
+# Development and testing dependencies
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-mock==3.14.0
+pytest-cov==6.0.0
+pytest-xdist==3.6.0
+
+# Code quality
+ruff==0.8.4
+mypy==1.13.0
+black==24.10.0
+isort==5.13.2
+
+# Development tools
+watchdog==6.0.0
+pre-commit==4.0.1
+
+# Mock servers
+responses==0.25.3
+pytest-httpx==0.35.0
