@@ -25,18 +25,24 @@ class PaymentGRPCClient:
         self.channel = None
         self.stub = None
     
-    async def connect(self):
-        """Connect to payment service gRPC."""
+    async def connect(self, retries: int = 5, delay: float = 1.0):
+        """Connect to payment service gRPC with retries."""
         self.channel = grpc.aio.insecure_channel(self.target)
         self.stub = payment_pb2_grpc.PaymentServiceStub(self.channel)
-        
-        # Test connection
-        try:
-            response = await self.stub.HealthCheck(payment_pb2.HealthCheckRequest())
-            logger.info(f"Connected to payment service: {response.status}")
-        except Exception as e:
-            logger.error(f"Failed to connect to payment service: {e}")
-            raise
+
+        for attempt in range(1, retries + 1):
+            try:
+                response = await self.stub.HealthCheck(payment_pb2.HealthCheckRequest())
+                logger.info(f"Connected to payment service: {response.status}")
+                return
+            except Exception as e:
+                logger.error(
+                    f"Attempt {attempt} to connect to payment service failed: {e}"
+                )
+                if attempt == retries:
+                    raise
+                await asyncio.sleep(delay)
+                delay *= 2
     
     async def disconnect(self):
         """Disconnect from payment service."""
