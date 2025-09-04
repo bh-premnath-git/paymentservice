@@ -49,12 +49,64 @@ These commands rely on `docker-compose` and a `.env` file for configuration.
 
 4. The requestor mock exposes REST endpoints at <http://localhost:8001/api/payments> and a GraphQL API at <http://localhost:8001/graphql>.
 
-The GraphQL API supports:
+## API Reference
 
-- `query payment(payment_id: String!): Payment`
-- `mutation createPayment(payload: PaymentInput!): Payment`
+### REST Endpoints
 
-where `Payment` contains `payment_id`, `amount`, `currency`, `status`, and `created_at` fields.
+| Method | Path | Description | Body |
+| ------ | ---- | ----------- | ---- |
+| `GET`  | `/health` | Service health check | _None_ |
+| `POST` | `/api/payments` | Create a new payment | `amount` (string), `currency` (string, default `USD`), `customer_id` (string), `payment_method` (string, default `card`) |
+| `GET`  | `/api/payments/{payment_id}` | Retrieve a payment by ID | _None_ |
+
+Successful REST responses have the shape:
+
+```json
+{
+  "success": true,
+  "data": {
+    "payment_id": "...",
+    "amount": "...",
+    "currency": "...",
+    "status": "...",
+    "created_at": "..."
+  }
+}
+```
+
+### GraphQL Operations
+
+The GraphQL endpoint is available at `/graphql` with the interactive GraphiQL UI enabled.
+
+#### Query
+
+```graphql
+query ($id: String!) {
+  payment(paymentId: $id) {
+    paymentId
+    amount
+    currency
+    status
+    createdAt
+  }
+}
+```
+
+#### Mutation
+
+```graphql
+mutation ($input: PaymentInput!) {
+  createPayment(payload: $input) {
+    paymentId
+    amount
+    currency
+    status
+    createdAt
+  }
+}
+```
+
+`PaymentInput` requires `amount`, `currency` (default `USD`), `customer_id`, and `payment_method` (default `card`). GraphQL `Payment` objects return `paymentId`, `amount`, `currency`, `status`, and `createdAt` fields.
 
 
 ## Testing
