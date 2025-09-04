@@ -2,11 +2,15 @@ import os
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 import grpc
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+import strawberry
+from strawberry.exceptions import GraphQLError
+from strawberry.fastapi import GraphQLRouter
 
 from payment.v1 import payment_pb2, payment_pb2_grpc
 
@@ -94,6 +98,47 @@ class PaymentGRPCClient:
 # Global gRPC client
 grpc_client = PaymentGRPCClient()
 
+
+@strawberry.type
+class Payment:
+    payment_id: str
+    amount: str
+    currency: str
+    status: str
+    created_at: str
+
+
+@strawberry.input
+class PaymentInput:
+    amount: str
+    currency: str = "USD"
+    customer_id: str
+    payment_method: str = "card"
+
+
+@strawberry.type
+class Query:
+    @strawberry.field
+    async def payment(self, payment_id: str) -> Payment:
+        try:
+            data = await grpc_client.get_payment(payment_id)
+            return Payment(**data)
+        except grpc.RpcError as e:
+            raise GraphQLError(e.details() or e.code().name)
+
+
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    async def create_payment(self, payload: PaymentInput) -> Payment:
+        try:
+            req = PaymentRequest(**asdict(payload))
+            result = await grpc_client.create_payment(req)
+            data = await grpc_client.get_payment(result["payment_id"])
+            return Payment(**data)
+        except grpc.RpcError as e:
+            raise GraphQLError(e.details() or e.code().name)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await grpc_client.connect()
@@ -129,11 +174,10 @@ async def get_payment_rest(payment_id: str):
     except grpc.RpcError as e:
         raise HTTPException(status_code=grpc_to_http_status(e.code()), detail=e.details() or e.code().name)
 
-# GraphQL placeholder (basic)
-@app.post("/graphql")
-async def graphql_endpoint():
-    """GraphQL endpoint placeholder."""
-    return {"message": "GraphQL endpoint - implement with strawberry/graphene"}
+# GraphQL setup
+schema = strawberry.Schema(query=Query, mutation=Mutation)
+graphql_app = GraphQLRouter(schema, graphiql=True)
+app.include_router(graphql_app, prefix="/graphql")
 
 @app.get("/")
 async def root():
