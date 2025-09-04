@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS payments (
     payment_id VARCHAR(36) PRIMARY KEY,
-    amount TEXT NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL,
     currency VARCHAR(3) NOT NULL,
     customer_id TEXT NOT NULL,
     payment_method TEXT NOT NULL,

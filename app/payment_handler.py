@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import grpc
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -24,9 +25,11 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
             payment_id = str(uuid.uuid4())
             created_at = datetime.now(timezone.utc)
 
+            amount = Decimal(request.amount)
+
             payment = Payment(
                 payment_id=payment_id,
-                amount=request.amount,
+                amount=amount,
                 currency=request.currency,
                 customer_id=request.customer_id,
                 payment_method=request.payment_method,
@@ -67,7 +70,7 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
 
             return payment_pb2.GetPaymentResponse(
                 payment_id=payment.payment_id,
-                amount=payment.amount,
+                amount=str(payment.amount),
                 currency=payment.currency,
                 status=payment.status,
                 created_at=payment.created_at.isoformat(),

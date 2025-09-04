@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, Dict
 
-from sqlalchemy import String, Text, JSON, DateTime
+from sqlalchemy import String, Text, JSON, DateTime, Numeric
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -13,7 +14,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     payment_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    amount: Mapped[str] = mapped_column(Text, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     customer_id: Mapped[str] = mapped_column(Text, nullable=False)
     payment_method: Mapped[str] = mapped_column(Text, nullable=False)
