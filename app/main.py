@@ -36,7 +36,7 @@ settings = get_settings()
 
 
 async def serve_grpc(
-    sessionmaker: async_sessionmaker, redis: Redis | None, bind: str = "[::]:50051"
+    sessionmaker: async_sessionmaker, redis: Redis | None, bind: str = "0.0.0.0:50051"
 ) -> None:
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
