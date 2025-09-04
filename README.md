@@ -1,3 +1,5 @@
+docker-compose --profile tools up -d --build
+
 # Payment Service
 
 This repository provides a gRPC-based payment service and a sandbox requestor mock used for local development and testing.
