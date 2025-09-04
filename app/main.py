@@ -46,11 +46,14 @@ async def serve_grpc(
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
         PaymentServiceHandler(sessionmaker, redis), server
     )
-    service_names = (
+
+    # Enable server reflection
+    SERVICE_NAMES = (
         payment_pb2.DESCRIPTOR.services_by_name["PaymentService"].full_name,
         reflection.SERVICE_NAME,
     )
-    reflection.enable_server_reflection(service_names, server)
+    reflection.add_reflection_servicer(server)
+
     server.add_insecure_port(bind)
 
     logger.info("Starting gRPC server on %s", bind)

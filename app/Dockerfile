@@ -6,7 +6,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://stripe-cli.github.io/install.sh | sh
 
 # Copy requirements first for better caching (from app directory)
 COPY app/requirements.txt .
