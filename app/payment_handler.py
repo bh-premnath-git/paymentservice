@@ -1,42 +1,49 @@
-import asyncio
 import logging
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import grpc
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from payment.v1 import payment_pb2, payment_pb2_grpc
+from models import Payment
 
 logger = logging.getLogger(__name__)
 
+
 class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
-    def __init__(self):
-        self._payments: dict[str, dict] = {}
-        self._lock = asyncio.Lock()
+    """gRPC handler backed by a PostgreSQL store."""
+
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession]):
+        self._sessionmaker = sessionmaker
         logger.info("PaymentServiceHandler initialized")
 
     async def CreatePayment(self, request, context):
         """Create a new payment."""
         try:
             payment_id = str(uuid.uuid4())
-            created_at = datetime.now(timezone.utc).isoformat()
+            created_at = datetime.now(timezone.utc)
 
-            payment_data = {
-                "payment_id": payment_id,
-                "amount": request.amount,
-                "currency": request.currency,
-                "customer_id": request.customer_id,
-                "payment_method": request.payment_method,
-                "metadata": dict(getattr(request, "metadata", {})),
-                "status": "created",
-                "created_at": created_at,
-            }
+            payment = Payment(
+                payment_id=payment_id,
+                amount=request.amount,
+                currency=request.currency,
+                customer_id=request.customer_id,
+                payment_method=request.payment_method,
+                metadata=dict(getattr(request, "metadata", {})),
+                status="created",
+                created_at=created_at,
+            )
 
-            async with self._lock:
-                self._payments[payment_id] = payment_data
+            async with self._sessionmaker() as session:
+                session.add(payment)
+                await session.commit()
 
             logger.info("Created payment %s", payment_id)
             return payment_pb2.CreatePaymentResponse(
-                payment_id=payment_id, status="created", created_at=created_at
+                payment_id=payment_id,
+                status="created",
+                created_at=created_at.isoformat(),
             )
 
         except Exception as e:
@@ -49,8 +56,9 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
         """Get payment by ID."""
         try:
             payment_id = request.payment_id
-            async with self._lock:
-                payment = self._payments.get(payment_id)
+
+            async with self._sessionmaker() as session:
+                payment = await session.get(Payment, payment_id)
 
             if not payment:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -58,11 +66,11 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
                 return payment_pb2.GetPaymentResponse()
 
             return payment_pb2.GetPaymentResponse(
-                payment_id=payment["payment_id"],
-                amount=payment["amount"],
-                currency=payment["currency"],
-                status=payment["status"],
-                created_at=payment["created_at"],
+                payment_id=payment.payment_id,
+                amount=payment.amount,
+                currency=payment.currency,
+                status=payment.status,
+                created_at=payment.created_at.isoformat(),
             )
 
         except Exception as e:
@@ -83,20 +91,23 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
                 "cancel": "cancelled",
             }
             new_status = status_map.get(action, "processed")
-            processed_at = datetime.now(timezone.utc).isoformat()
+            processed_at = datetime.now(timezone.utc)
 
-            async with self._lock:
-                payment = self._payments.get(payment_id)
+            async with self._sessionmaker() as session:
+                payment = await session.get(Payment, payment_id)
                 if not payment:
                     context.set_code(grpc.StatusCode.NOT_FOUND)
                     context.set_details(f"Payment not found: {payment_id}")
                     return payment_pb2.ProcessPaymentResponse()
-                payment["status"] = new_status
-                payment["processed_at"] = processed_at
+                payment.status = new_status
+                payment.processed_at = processed_at
+                await session.commit()
 
             logger.info("Processed payment %s: %s -> %s", payment_id, action, new_status)
             return payment_pb2.ProcessPaymentResponse(
-                payment_id=payment_id, status=new_status, processed_at=processed_at
+                payment_id=payment_id,
+                status=new_status,
+                processed_at=processed_at.isoformat(),
             )
 
         except Exception as e:

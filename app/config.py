@@ -1,0 +1,18 @@
+from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application configuration loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
+    database_url: str = (
+        "postgresql+asyncpg://payment:payment@localhost:5432/payment_db"
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Get cached Settings instance."""
+    return Settings()
