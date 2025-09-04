@@ -7,7 +7,7 @@ This repository provides a gRPC-based payment service and a sandbox requestor mo
 - **Protos** live in `protos/payment/v1/payment.proto` and are compiled into Python modules under `payment/v1`.
 - `generate_protos.sh` (invoked via `make protos`) uses `grpcio-tools` in an isolated virtual environment to generate `*_pb2.py` and `*_pb2_grpc.py` files and ensures `__init__.py` files exist.
 - The **app** in `app/` runs both a FastAPI HTTP server (port 8000) and a gRPC server (port 50051) that implements `CreatePayment`, `GetPayment`, `ProcessPayment`, and `HealthCheck` using the generated protobuf code.
-- The sandbox **requestor mock** in `sandbox/requestor_mock/` is a FastAPI service that exposes REST endpoints and forwards requests to the payment service via gRPC. It reuses the same generated protobuf modules and connects to the gRPC endpoint `payment-service:50051`.
+- The sandbox **requestor mock** in `sandbox/requestor_mock/` is a FastAPI service that exposes REST and GraphQL APIs and forwards requests to the payment service via gRPC. It reuses the same generated protobuf modules and connects to the gRPC endpoint `payment-service:50051`.
 
 ## Docker Setup
 
@@ -46,7 +46,16 @@ These commands rely on `docker-compose` and a `.env` file for configuration.
    make up
    ```
 3. The payment service is available at <http://localhost:8000> and gRPC on port `50051`.
-4. The requestor mock exposes REST endpoints at <http://localhost:8001/api/payments>.
+
+4. The requestor mock exposes REST endpoints at <http://localhost:8001/api/payments> and a GraphQL API at <http://localhost:8001/graphql>.
+
+The GraphQL API supports:
+
+- `query payment(payment_id: String!): Payment`
+- `mutation createPayment(payload: PaymentInput!): Payment`
+
+where `Payment` contains `payment_id`, `amount`, `currency`, `status`, and `created_at` fields.
+
 
 ## Testing
 
