@@ -5,6 +5,7 @@ package payment.v1;
 service PaymentService {
   rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse);
   rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
   rpc ProcessPayment(ProcessPaymentRequest) returns (ProcessPaymentResponse);
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }
@@ -33,6 +34,12 @@ message GetPaymentResponse {
   string currency = 3;
   string status = 4;
   string created_at = 5;
+}
+
+message ListPaymentsRequest {}
+
+message ListPaymentsResponse {
+  repeated GetPaymentResponse payments = 1;
 }
 
 message ProcessPaymentRequest {
