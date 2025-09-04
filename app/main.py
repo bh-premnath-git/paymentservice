@@ -3,10 +3,15 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from grpc import aio as grpc_aio
+
+from config import get_settings
 
 # Generated protobuf files
 from payment.v1 import payment_pb2_grpc
@@ -26,10 +31,16 @@ class EndpointFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 
-# gRPC Server
-async def serve_grpc(bind: str = "[::]:50051") -> None:
+settings = get_settings()
+
+
+async def serve_grpc(
+    sessionmaker: async_sessionmaker, bind: str = "[::]:50051"
+) -> None:
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
-    payment_pb2_grpc.add_PaymentServiceServicer_to_server(PaymentServiceHandler(), server)
+    payment_pb2_grpc.add_PaymentServiceServicer_to_server(
+        PaymentServiceHandler(sessionmaker), server
+    )
     server.add_insecure_port(bind)
 
     logger.info("Starting gRPC server on %s", bind)
@@ -41,19 +52,27 @@ async def serve_grpc(bind: str = "[::]:50051") -> None:
         await server.stop(grace=5)
         raise
     finally:
-        # Ensure stopped even if termination returns without cancellation
         await server.stop(grace=0)
+
 
 # FastAPI App
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    grpc_task = asyncio.create_task(serve_grpc())
+    engine: AsyncEngine = create_async_engine(settings.database_url)
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+
+    # Ensure database is reachable before starting services
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT 1"))
+
+    grpc_task = asyncio.create_task(serve_grpc(sessionmaker))
     try:
         yield
     finally:
         grpc_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await grpc_task
+        await engine.dispose()
 
 app = FastAPI(
     title="Payment Service",
