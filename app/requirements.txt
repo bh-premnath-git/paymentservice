@@ -19,7 +19,7 @@ httpx==0.28.1
 aiohttp==3.11.10
 
 # Payment providers
-stripe==11.2.0
+stripe==12.5.0
 
 # Caching
 redis==5.0.1
