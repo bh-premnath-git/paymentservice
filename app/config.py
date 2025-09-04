@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://payment:payment@localhost:5432/payment_db"
     )
+    redis_url: str = "redis://localhost:6379/0"
 
 
 @lru_cache

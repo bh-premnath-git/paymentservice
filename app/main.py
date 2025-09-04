@@ -10,6 +10,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from grpc import aio as grpc_aio
+from redis.asyncio import Redis
 
 from config import get_settings
 
@@ -35,11 +36,11 @@ settings = get_settings()
 
 
 async def serve_grpc(
-    sessionmaker: async_sessionmaker, bind: str = "[::]:50051"
+    sessionmaker: async_sessionmaker, redis: Redis | None, bind: str = "[::]:50051"
 ) -> None:
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
-        PaymentServiceHandler(sessionmaker), server
+        PaymentServiceHandler(sessionmaker, redis), server
     )
     server.add_insecure_port(bind)
 
@@ -65,7 +66,17 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.execute(text("SELECT 1"))
 
-    grpc_task = asyncio.create_task(serve_grpc(sessionmaker))
+    redis: Redis | None = None
+    try:
+        redis = Redis.from_url(
+            settings.redis_url, encoding="utf-8", decode_responses=True
+        )
+        await redis.ping()
+    except Exception as exc:  # pragma: no cover - startup warning
+        logger.warning("Redis unavailable: %s", exc)
+        redis = None
+
+    grpc_task = asyncio.create_task(serve_grpc(sessionmaker, redis))
     try:
         yield
     finally:
@@ -73,6 +84,8 @@ async def lifespan(app: FastAPI):
         with contextlib.suppress(asyncio.CancelledError):
             await grpc_task
         await engine.dispose()
+        if redis is not None:
+            await redis.close()
 
 app = FastAPI(
     title="Payment Service",
