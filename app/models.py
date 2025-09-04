@@ -17,7 +17,9 @@ class Payment(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     customer_id: Mapped[str] = mapped_column(Text, nullable=False)
     payment_method: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[Dict[str, str]] = mapped_column(JSON, default=dict)
+    metadata_: Mapped[Dict[str, str]] = mapped_column(
+        "metadata", JSON, default=dict
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
