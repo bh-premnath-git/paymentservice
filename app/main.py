@@ -1,13 +1,12 @@
 import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import grpc
-from grpc import aio
+from grpc import aio as grpc_aio
 
 # Generated protobuf files
 from payment.v1 import payment_pb2_grpc
@@ -15,41 +14,46 @@ from payment_handler import PaymentServiceHandler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("payment-service")
+
+
+class EndpointFilter(logging.Filter):
+    """Filter out noisy health check access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # pragma: no cover - logging filter
+        return "GET /health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 # gRPC Server
-async def serve_grpc():
-    server = aio.server(ThreadPoolExecutor(max_workers=10))
-    
-    # Add payment service handler
-    payment_handler = PaymentServiceHandler()
-    payment_pb2_grpc.add_PaymentServiceServicer_to_server(payment_handler, server)
-    
-    # Add insecure port
-    listen_addr = '[::]:50051'
-    server.add_insecure_port(listen_addr)
-    
-    logger.info(f"Starting gRPC server on {listen_addr}")
+async def serve_grpc(bind: str = "[::]:50051") -> None:
+    server = grpc_aio.server(maximum_concurrent_rpcs=100)
+    payment_pb2_grpc.add_PaymentServiceServicer_to_server(PaymentServiceHandler(), server)
+    server.add_insecure_port(bind)
+
+    logger.info("Starting gRPC server on %s", bind)
     await server.start()
-    
     try:
         await server.wait_for_termination()
-    except KeyboardInterrupt:
-        logger.info("Shutting down gRPC server...")
-        await server.stop(5)
+    except asyncio.CancelledError:
+        logger.info("Cancellation received; stopping gRPC server...")
+        await server.stop(grace=5)
+        raise
+    finally:
+        # Ensure stopped even if termination returns without cancellation
+        await server.stop(grace=0)
 
 # FastAPI App
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start gRPC server in background
     grpc_task = asyncio.create_task(serve_grpc())
-    yield
-    # Cleanup
-    grpc_task.cancel()
     try:
-        await grpc_task
-    except asyncio.CancelledError:
-        pass
+        yield
+    finally:
+        grpc_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await grpc_task
 
 app = FastAPI(
     title="Payment Service",
@@ -60,8 +64,8 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly for production
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
