@@ -13,6 +13,15 @@ from payment.v1 import payment_pb2, payment_pb2_grpc
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("requestor-mock")
 
+class EndpointFilter(logging.Filter):
+    """Filter out noisy health check access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # pragma: no cover - logging filter
+        return "GET /health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
 class PaymentRequest(BaseModel):
     amount: str
     currency: str = "USD"
@@ -40,7 +49,6 @@ class PaymentGRPCClient:
         self.stub: payment_pb2_grpc.PaymentServiceStub | None = None
 
     async def connect(self, retries: int = 5, delay: float = 1.0):
-
         self.channel = grpc.aio.insecure_channel(self.target)
         self.stub = payment_pb2_grpc.PaymentServiceStub(self.channel)
 
