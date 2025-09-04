@@ -46,6 +46,7 @@ These commands rely on `docker-compose` and a `.env` file for configuration.
    make up
    ```
 3. The payment service is available at <http://localhost:8000> and gRPC on port `50051`.
+
 4. The requestor mock exposes REST endpoints at <http://localhost:8001/api/payments> and a GraphQL API at <http://localhost:8001/graphql>.
 
 ## API Reference
@@ -106,6 +107,7 @@ mutation ($input: PaymentInput!) {
 ```
 
 `PaymentInput` requires `amount`, `currency` (default `USD`), `customer_id`, and `payment_method` (default `card`). GraphQL `Payment` objects return `paymentId`, `amount`, `currency`, `status`, and `createdAt` fields.
+
 
 ## Testing
 
