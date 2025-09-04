@@ -91,6 +91,16 @@ docker compose up grpcui
 
 This launches a web UI at <http://localhost:8080/> that connects to the gRPC server. The `grpcui` service is run with the `-plaintext` flag to match the server's lack of TLS, and no additional authentication is required.
 
+### Troubleshooting
+
+If `grpcui` displays an error like:
+
+```
+Failed to dial target host "payment-service:50051": connection error: desc = "transport: error while dialing: dial tcp 172.18.0.2:50051: connect: connection refused"
+```
+
+ensure the `payment-service` container is running and its gRPC server is listening on port `50051`. Start it with `docker compose up payment-service` and wait for the container's health check to report `healthy` before launching `grpcui`.
+
 ### Example: `CreatePayment`
 
 1. Navigate to <http://localhost:8080/> and select `payment.v1.PaymentService`.
