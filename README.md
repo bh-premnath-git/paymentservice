@@ -23,6 +23,36 @@ The project uses `docker-compose.yml` to orchestrate services:
 
 All services share the `payment-network` Docker network and have basic health checks defined.
 
+### Service Overview
+
+#### payment-service
+- **Path:** `app/`
+- **Ports:** 8000 (HTTP), 50051 (gRPC)
+- **Purpose:** Hosts the main payment API. Implements FastAPI endpoints and the gRPC `PaymentService` with methods such as `CreatePayment`, `GetPayment`, `ProcessPayment`, and `HealthCheck`.
+- **Dependencies:** Requires Postgres for persistence and optionally Redis for caching.
+- **Health Check:** `GET /health`
+
+#### requestor-mock
+- **Path:** `sandbox/requestor_mock/`
+- **Port:** 8001
+- **Purpose:** Simulates an external requestor. Forwards requests to `payment-service` via gRPC and exposes both REST and GraphQL interfaces for testing.
+- **Health Check:** `GET /health`
+
+#### postgres
+- **Image:** `postgres:13.22-alpine3.21`
+- **Port:** 5432
+- **Purpose:** Stores payment records. Initializes schema from `scripts/init-db.sql` and persists data in a Docker volume.
+
+#### redis
+- **Image:** `redis:alpine3.22`
+- **Port:** 6379
+- **Purpose:** Provides a Redis instance for caching or other ephemeral storage needs.
+
+#### grpcui (optional)
+- **Image:** `fullstorydev/grpcui:latest`
+- **Port:** 8080
+- **Purpose:** Web UI for manually invoking gRPC methods during development. Depends on `payment-service` being available on port 50051. If `payment-service` is not running or the gRPC server has not started yet, `grpcui` will show a connection-refused error.
+
 ## Shell / Makefile Commands
 
 The `Makefile` wraps common commands:
@@ -60,6 +90,16 @@ docker compose up grpcui
 ```
 
 This launches a web UI at <http://localhost:8080/> that connects to the gRPC server. The `grpcui` service is run with the `-plaintext` flag to match the server's lack of TLS, and no additional authentication is required.
+
+### Troubleshooting
+
+If `grpcui` displays an error like:
+
+```
+Failed to dial target host "payment-service:50051": connection error: desc = "transport: error while dialing: dial tcp 172.18.0.2:50051: connect: connection refused"
+```
+
+ensure the `payment-service` container is running and its gRPC server is listening on port `50051`. Start it with `docker compose up payment-service` and wait for the container's health check to report `healthy` before launching `grpcui`.
 
 ### Example: `CreatePayment`
 

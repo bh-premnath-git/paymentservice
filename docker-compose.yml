@@ -100,13 +100,14 @@ services:
     image: fullstorydev/grpcui:latest
     ports:
       - "8080:8080"
-    command: 
+    command:
       - -plaintext
       - -bind=0.0.0.0
       - -port=8080
       - payment-service:50051
     depends_on:
-      - payment-service
+      payment-service:
+        condition: service_healthy
     networks:
       - payment-network
     profiles:
