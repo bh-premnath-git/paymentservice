@@ -37,7 +37,10 @@ settings = get_settings()
 
 
 async def serve_grpc(
-    sessionmaker: async_sessionmaker, redis: Redis | None, bind: str = "0.0.0.0:50051"
+    sessionmaker: async_sessionmaker,
+    redis: Redis | None,
+    bind: str = "0.0.0.0:50051",
+    started_event: asyncio.Event | None = None,
 ) -> None:
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
@@ -52,6 +55,8 @@ async def serve_grpc(
 
     logger.info("Starting gRPC server on %s", bind)
     await server.start()
+    if started_event is not None:
+        started_event.set()
     try:
         await server.wait_for_termination()
     except asyncio.CancelledError:
@@ -82,7 +87,11 @@ async def lifespan(app: FastAPI):
         logger.warning("Redis unavailable: %s", exc)
         redis = None
 
-    grpc_task = asyncio.create_task(serve_grpc(sessionmaker, redis))
+    started_event = asyncio.Event()
+    grpc_task = asyncio.create_task(
+        serve_grpc(sessionmaker, redis, started_event=started_event)
+    )
+    await started_event.wait()
     try:
         yield
     finally:
