@@ -16,7 +16,6 @@ from payment_handler import PaymentServiceHandler
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("payment-service")
 
-
 class EndpointFilter(logging.Filter):
     """Filter out noisy health check access logs."""
 
@@ -25,6 +24,7 @@ class EndpointFilter(logging.Filter):
 
 
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
 
 # gRPC Server
 async def serve_grpc(bind: str = "[::]:50051") -> None:

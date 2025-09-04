@@ -13,7 +13,6 @@ from payment.v1 import payment_pb2, payment_pb2_grpc
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("requestor-mock")
 
-
 class EndpointFilter(logging.Filter):
     """Filter out noisy health check access logs."""
 
