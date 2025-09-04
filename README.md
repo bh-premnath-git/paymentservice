@@ -13,6 +13,8 @@ This repository provides a gRPC-based payment service and a sandbox requestor mo
 
 ## Docker Setup
 
+Run `docker compose` commands from the repository root so that paths resolve correctly. Before starting containers, confirm that `scripts/init-db.sql` exists; Postgres uses this file to initialize the database.
+
 The project uses `docker-compose.yml` to orchestrate services:
 
 - **payment-service** – built from `app/Dockerfile`, exposes ports 8000 (HTTP) and 50051 (gRPC), and depends on Postgres.
