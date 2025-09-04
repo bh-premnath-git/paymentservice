@@ -33,7 +33,7 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
                 currency=request.currency,
                 customer_id=request.customer_id,
                 payment_method=request.payment_method,
-                metadata_=dict(getattr(request, "metadata", {})),
+                metadata_=dict(request.metadata),
                 status="created",
                 created_at=created_at,
             )
