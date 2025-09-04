@@ -40,6 +40,7 @@ class PaymentGRPCClient:
         self.stub: payment_pb2_grpc.PaymentServiceStub | None = None
 
     async def connect(self, retries: int = 5, delay: float = 1.0):
+
         self.channel = grpc.aio.insecure_channel(self.target)
         self.stub = payment_pb2_grpc.PaymentServiceStub(self.channel)
 
