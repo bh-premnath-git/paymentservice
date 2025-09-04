@@ -3,7 +3,8 @@ FROM python:3.13.7-slim as base
 WORKDIR /app
 
 # Install runtime dependencies only (no grpcio-tools needed at runtime)
-RUN pip install fastapi uvicorn grpcio==1.74.0 protobuf==6.31.1
+RUN pip install fastapi uvicorn grpcio==1.74.0 protobuf==6.31.1 \
+    strawberry-graphql[fastapi]
 
 # Copy pre-generated proto files (from root level)
 COPY payment ./payment
