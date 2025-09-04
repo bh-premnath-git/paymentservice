@@ -100,4 +100,5 @@ The `tests/` directory contains unit tests that verify behaviour such as
 metadata persistence, server reflection and metadata propagation through the
 REST and GraphQL gateways.
 
-
+start the service with tools profile:
+ - docker-compose --profile tools up -d --build
