@@ -49,6 +49,33 @@ These commands rely on `docker-compose` and a `.env` file for configuration.
 
 4. The requestor mock exposes REST endpoints at <http://localhost:8001/api/payments> and a GraphQL API at <http://localhost:8001/graphql>.
 
+## Inspecting the gRPC API
+
+To browse and interact with the gRPC methods from your browser, start the optional `grpcui` container:
+
+```bash
+docker compose up grpcui
+```
+
+This launches a web UI at <http://localhost:8080/> that connects to the gRPC server. The `grpcui` service is run with the `-plaintext` flag to match the server's lack of TLS, and no additional authentication is required.
+
+### Example: `CreatePayment`
+
+1. Navigate to <http://localhost:8080/> and select `payment.v1.PaymentService`.
+2. Choose the `CreatePayment` method and supply a request body such as:
+
+```json
+{
+  "amount": "10.00",
+  "currency": "USD",
+  "customer_id": "cust123",
+  "payment_method": "card"
+}
+```
+
+3. Submit the request to view the response, which includes fields like `payment_id`, `status`, and `created_at`.
+
+
 ## API Reference
 
 ### REST Endpoints
