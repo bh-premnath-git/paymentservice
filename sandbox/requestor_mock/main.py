@@ -102,6 +102,19 @@ class PaymentGRPCClient:
             "created_at": resp.created_at,
         }
 
+    async def list_payments(self):
+        resp = await self.stub.ListPayments(payment_pb2.ListPaymentsRequest())
+        return [
+            {
+                "payment_id": p.payment_id,
+                "amount": p.amount,
+                "currency": p.currency,
+                "status": p.status,
+                "created_at": p.created_at,
+            }
+            for p in resp.payments
+        ]
+
 # Global gRPC client
 grpc_client = PaymentGRPCClient()
 
@@ -131,6 +144,14 @@ class Query:
         try:
             data = await grpc_client.get_payment(payment_id)
             return Payment(**data)
+        except grpc.RpcError as e:
+            raise GraphQLError(e.details() or e.code().name)
+
+    @strawberry.field
+    async def payments(self) -> list[Payment]:
+        try:
+            data = await grpc_client.list_payments()
+            return [Payment(**p) for p in data]
         except grpc.RpcError as e:
             raise GraphQLError(e.details() or e.code().name)
 
@@ -171,6 +192,14 @@ async def create_payment_rest(payment: PaymentRequest):
     """REST endpoint to create payment."""
     try:
         return {"success": True, "data": await grpc_client.create_payment(payment)}
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=grpc_to_http_status(e.code()), detail=e.details() or e.code().name)
+
+@app.get("/api/payments")
+async def list_payments_rest():
+    """REST endpoint to list payments."""
+    try:
+        return {"success": True, "data": await grpc_client.list_payments()}
     except grpc.RpcError as e:
         raise HTTPException(status_code=grpc_to_http_status(e.code()), detail=e.details() or e.code().name)
 

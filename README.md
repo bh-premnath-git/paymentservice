@@ -37,10 +37,11 @@ GraphQL.
 
 The service defines a single gRPC API in
 [`protos/payment/v1/payment.proto`](protos/payment/v1/payment.proto).  The
-`PaymentService` includes four RPCs:
+`PaymentService` includes five RPCs:
 
 - `CreatePayment` – store a new payment
 - `GetPayment` – fetch a payment by ID
+- `ListPayments` – retrieve all payments
 - `ProcessPayment` – update status (capture, refund, cancel)
 - `HealthCheck` – simple liveness probe
 
@@ -55,9 +56,11 @@ wrap the gRPC API:
 
 - **REST**
   - `POST /api/payments` – create a payment
+  - `GET /api/payments` – list payments
   - `GET /api/payments/{payment_id}` – retrieve payment details
 - **GraphQL**
   - Query `payment(payment_id: ID!)` – fetch a payment
+  - Query `payments` – list payments
   - Mutation `create_payment(payload: PaymentInput!)` – create a payment
 
 These endpoints internally call the gRPC `PaymentService` using the generated

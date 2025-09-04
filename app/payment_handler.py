@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Optional
 
 import grpc
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from redis.asyncio import Redis
 
@@ -134,6 +135,30 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Failed to get payment: {e}")
             return payment_pb2.GetPaymentResponse()
+
+    async def ListPayments(self, request, context):
+        """List all payments."""
+        try:
+            async with self._sessionmaker() as session:
+                result = await session.execute(select(Payment))
+                payments = result.scalars().all()
+
+            payment_list = [
+                payment_pb2.GetPaymentResponse(
+                    payment_id=p.payment_id,
+                    amount=str(p.amount),
+                    currency=p.currency,
+                    status=p.status,
+                    created_at=p.created_at.isoformat(),
+                )
+                for p in payments
+            ]
+            return payment_pb2.ListPaymentsResponse(payments=payment_list)
+        except Exception as e:
+            logger.exception("Error listing payments")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Failed to list payments: {e}")
+            return payment_pb2.ListPaymentsResponse()
 
     async def ProcessPayment(self, request, context):
         """Process payment action."""
