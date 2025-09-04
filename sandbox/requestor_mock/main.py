@@ -176,7 +176,7 @@ async def get_payment_rest(payment_id: str):
 
 # GraphQL setup
 schema = strawberry.Schema(query=Query, mutation=Mutation)
-graphql_app = GraphQLRouter(schema, graphiql=True)
+graphql_app = GraphQLRouter(schema, graphql_ide="graphiql")
 app.include_router(graphql_app, prefix="/graphql")
 
 @app.get("/")
