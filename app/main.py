@@ -10,12 +10,13 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from grpc import aio as grpc_aio
+from grpc_reflection.v1alpha import reflection
 from redis.asyncio import Redis
 
 from config import get_settings
 
 # Generated protobuf files
-from payment.v1 import payment_pb2_grpc
+from payment.v1 import payment_pb2, payment_pb2_grpc
 from payment_handler import PaymentServiceHandler
 
 # Configure logging
@@ -42,6 +43,11 @@ async def serve_grpc(
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
         PaymentServiceHandler(sessionmaker, redis), server
     )
+    service_names = (
+        payment_pb2.DESCRIPTOR.services_by_name["PaymentService"].full_name,
+        reflection.SERVICE_NAME,
+    )
+    reflection.enable_server_reflection(service_names, server)
     server.add_insecure_port(bind)
 
     logger.info("Starting gRPC server on %s", bind)
