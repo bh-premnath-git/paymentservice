@@ -7,8 +7,9 @@ from dataclasses import asdict
 import grpc
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import strawberry
+from strawberry.scalars import JSON
 from strawberry.exceptions import GraphQLError
 from strawberry.fastapi import GraphQLRouter
 
@@ -31,6 +32,7 @@ class PaymentRequest(BaseModel):
     currency: str = "USD"
     customer_id: str
     payment_method: str = "card"
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 def grpc_to_http_status(code: grpc.StatusCode) -> int:
     mapping = {
@@ -81,9 +83,14 @@ class PaymentGRPCClient:
             currency=payload.currency,
             customer_id=payload.customer_id,
             payment_method=payload.payment_method,
+            metadata=payload.metadata,
         )
         resp = await self.stub.CreatePayment(req)  # type: ignore[arg-type]
-        return {"payment_id": resp.payment_id, "status": resp.status, "created_at": resp.created_at}
+        return {
+            "payment_id": resp.payment_id,
+            "status": resp.status,
+            "created_at": resp.created_at,
+        }
 
     async def get_payment(self, payment_id: str):
         resp = await self.stub.GetPayment(payment_pb2.GetPaymentRequest(payment_id=payment_id))
@@ -114,6 +121,7 @@ class PaymentInput:
     currency: str = "USD"
     customer_id: str
     payment_method: str = "card"
+    metadata: JSON = strawberry.field(default_factory=dict)
 
 
 @strawberry.type
