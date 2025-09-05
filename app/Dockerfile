@@ -6,9 +6,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     build-essential \
+    gnupg \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://stripe-cli.github.io/install.sh | sh \
-    && mv /root/stripe /usr/bin/stripe
+    && curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | tee /usr/share/keyrings/stripe.gpg >/dev/null \
+    && echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | tee -a /etc/apt/sources.list.d/stripe.list >/dev/null \
+    && apt-get update \
+    && apt-get install -y stripe
 
 # Copy requirements first for better caching (from app directory)
 COPY app/requirements.txt .
