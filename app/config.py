@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     APP_REST_PORT: int = 8000
     APP_GRPC_PORT: int = 50051
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
 
 
 @lru_cache
