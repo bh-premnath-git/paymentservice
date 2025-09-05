@@ -31,3 +31,9 @@ class PaymentAdapter(ABC):
     @abstractmethod
     async def cancel_payment(self, payment_id: str, **kwargs: Any) -> Dict[str, Any]:
         """Cancel a created but not yet captured payment."""
+
+    @abstractmethod
+    async def webhook_verify(
+        self, payload: bytes, sig_header: str
+    ) -> Dict[str, Any]:
+        """Validate and parse a webhook payload from the provider."""

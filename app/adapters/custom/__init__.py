@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from typing import Any, Dict
+import json
 
 from ..base import PaymentAdapter
 
@@ -32,5 +33,11 @@ class CustomAdapter(PaymentAdapter):
 
     async def cancel_payment(self, payment_id: str, **kwargs: Any) -> Dict[str, Any]:
         return {"id": payment_id, "status": "cancelled"}
+
+    async def webhook_verify(
+        self, payload: bytes, sig_header: str
+    ) -> Dict[str, Any]:
+        data = json.loads(payload.decode())
+        return {"type": data.get("type", "unknown"), "data": data.get("data", {})}
 
 __all__ = ["CustomAdapter"]

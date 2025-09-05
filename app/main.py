@@ -2,18 +2,22 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
+from functools import lru_cache
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from grpc import aio as grpc_aio
 from grpc_reflection.v1alpha import reflection
 from redis.asyncio import Redis
 
 from config import get_settings
+from adapters import PaymentAdapter
+from adapters.custom import CustomAdapter
+from adapters.stripe import StripeAdapter
 
 # Generated protobuf files
 from payment.v1 import payment_pb2, payment_pb2_grpc
@@ -34,6 +38,13 @@ logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 
 settings = get_settings()
+
+
+@lru_cache(maxsize=1)
+def get_provider() -> PaymentAdapter:
+    if settings.stripe_secret_key and settings.stripe_webhook_secret:
+        return StripeAdapter(settings.stripe_secret_key, settings.stripe_webhook_secret)
+    return CustomAdapter()
 
 
 async def serve_grpc(
@@ -120,6 +131,31 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "payment-service"}
+
+
+@app.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    provider = get_provider()
+    payload = await request.body()
+    sig = request.headers.get("Stripe-Signature")
+    if not sig:
+        raise HTTPException(status_code=400, detail="Missing Stripe-Signature")
+    try:
+        evt = await provider.webhook_verify(payload, sig)
+    except Exception as exc:  # pragma: no cover - signature failure
+        raise HTTPException(status_code=400, detail=f"Webhook verification failed: {exc}")
+
+    etype = evt["type"]
+    _obj = evt["data"]  # noqa: F841 - placeholder for reconciliation logic
+
+    if etype == "payment_intent.succeeded":
+        pass
+    elif etype == "checkout.session.completed":
+        pass
+    elif etype == "charge.refunded":
+        pass
+
+    return {"received": True}
 
 @app.get("/")
 async def root():

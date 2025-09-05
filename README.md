@@ -62,9 +62,23 @@ integrate with the real API.
 
 ```python
 from adapters.stripe import StripeAdapter
-adapter = StripeAdapter(api_key="sk_test_...")
+adapter = StripeAdapter(api_key="sk_test_...", webhook_secret="whsec_...")
 await adapter.create_payment(10, "USD")
 ```
+
+### Stripe Webhooks
+
+The FastAPI app exposes a `POST /webhooks/stripe` endpoint for receiving
+events from the Stripe CLI. Start a local listener with:
+
+```bash
+stripe listen --forward-to localhost:8000/webhooks/stripe
+```
+
+Incoming payloads are validated using `STRIPE_WEBHOOK_SECRET` and the handler
+responds with `{ "received": true }`. Extend the logic in
+[`app/main.py`](app/main.py) to reconcile events with your system.
+
 
 ### Custom Adapter
 
@@ -126,7 +140,10 @@ table when the database container initialises.
 
 `.env` stores development defaults used by the service and docker-compose. Key
 variables include database connection details, Redis URL, ports and feature
-flags. `app/config.py` loads these settings via `pydantic-settings`.
+flags. Stripe integrations rely on `STRIPE_SECRET_KEY` and
+`STRIPE_WEBHOOK_SECRET`. `app/config.py` loads these settings via
+`pydantic-settings`.
+
 
 ## Docker and Docker Compose
 

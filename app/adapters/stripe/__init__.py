@@ -3,6 +3,7 @@
 from decimal import Decimal
 from typing import Any, Dict
 
+import stripe
 from ..base import PaymentAdapter
 
 
@@ -15,8 +16,9 @@ class StripeAdapter(PaymentAdapter):
     developed without contacting Stripe.
     """
 
-    def __init__(self, api_key: str) -> None:
-        self.api_key = api_key
+    def __init__(self, api_key: str, webhook_secret: str) -> None:
+        stripe.api_key = api_key
+        self.webhook_secret = webhook_secret
 
     async def create_payment(
         self, amount: Decimal, currency: str, **kwargs: Any
@@ -36,5 +38,13 @@ class StripeAdapter(PaymentAdapter):
 
     async def cancel_payment(self, payment_id: str, **kwargs: Any) -> Dict[str, Any]:
         return {"id": payment_id, "status": "cancelled"}
+
+    async def webhook_verify(
+        self, payload: bytes, sig_header: str
+    ) -> Dict[str, Any]:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, self.webhook_secret
+        )
+        return {"type": event["type"], "data": event["data"]["object"]}
 
 __all__ = ["StripeAdapter"]
