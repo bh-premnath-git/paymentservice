@@ -79,6 +79,7 @@ Incoming payloads are validated using `STRIPE_WEBHOOK_SECRET` and the handler
 responds with `{ "received": true }`. Extend the logic in
 [`app/main.py`](app/main.py) to reconcile events with your system.
 
+
 ### Custom Adapter
 
 [`app/adapters/custom`](app/adapters/custom/__init__.py) demonstrates how to
@@ -142,6 +143,7 @@ variables include database connection details, Redis URL, ports and feature
 flags. Stripe integrations rely on `STRIPE_SECRET_KEY` and
 `STRIPE_WEBHOOK_SECRET`. `app/config.py` loads these settings via
 `pydantic-settings`.
+
 
 ## Docker and Docker Compose
 

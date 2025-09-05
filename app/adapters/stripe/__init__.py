@@ -4,7 +4,6 @@ from decimal import Decimal
 from typing import Any, Dict
 
 import stripe
-
 from ..base import PaymentAdapter
 
 
