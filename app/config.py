@@ -11,6 +11,8 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://payment:payment@localhost:5432/payment_db"
     )
     redis_url: str = "redis://localhost:6379/0"
+    APP_REST_PORT: int = 8000
+    APP_GRPC_PORT: int = 50051
 
 
 @lru_cache

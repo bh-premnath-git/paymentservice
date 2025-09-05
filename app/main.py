@@ -123,14 +123,14 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Payment Service API", "grpc_port": 50051}
+    return {"message": "Payment Service API", "grpc_port": settings.APP_GRPC_PORT}
 
 if __name__ == "__main__":
     # Run FastAPI server
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=settings.APP_REST_PORT,
         reload=True,
         log_level="info"
     )
