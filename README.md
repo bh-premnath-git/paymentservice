@@ -198,3 +198,5 @@ The `tests/` directory contains unit tests that verify behaviour such as
 metadata persistence, server reflection and metadata propagation through the
 REST and GraphQL gateways.
 
+ stripe listen --forward-to localhost:8000/webhooks/stripe ( login if required and give access grant )
+ 
