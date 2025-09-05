@@ -17,6 +17,9 @@ GraphQL.
 │   ├── models.py            # SQLAlchemy models (Payment table)
 │   ├── payment_handler.py   # gRPC `PaymentService` implementation
 │   └── requirements.txt     # Python dependencies
+|   |__ adapters/            # Adapters for external payment services
+|   |__ |__ stripe/          # Stripe payment adapter
+|   |__ |__ custom/          # Custom payment adapter
 ├── payment/                 # Generated protobuf packages
 ├── protos/                  # Source `.proto` definitions
 │   └── payment/v1/payment.proto
