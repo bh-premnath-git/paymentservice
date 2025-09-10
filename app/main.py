@@ -42,17 +42,20 @@ settings = get_settings()
 
 @lru_cache(maxsize=1)
 def get_provider() -> PaymentAdapter:
-    if settings.stripe_secret_key and settings.stripe_webhook_secret:
-        return StripeAdapter(settings.stripe_secret_key, settings.stripe_webhook_secret)
+    if settings.STRIPE_SECRET_KEY and settings.STRIPE_WEBHOOK_SECRET:
+        return StripeAdapter(
+            settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET
+        )
     return CustomAdapter()
 
 
 async def serve_grpc(
     sessionmaker: async_sessionmaker,
     redis: Redis | None,
-    bind: str = "0.0.0.0:50051",
+    bind: str | None = None,
     started_event: asyncio.Event | None = None,
 ) -> None:
+    bind = bind or f"0.0.0.0:{settings.GRPC_PORT}"
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
         PaymentServiceHandler(sessionmaker, redis), server
@@ -159,14 +162,14 @@ async def stripe_webhook(request: Request):
 
 @app.get("/")
 async def root():
-    return {"message": "Payment Service API", "grpc_port": settings.APP_GRPC_PORT}
+    return {"message": "Payment Service API", "grpc_port": settings.GRPC_PORT}
 
 if __name__ == "__main__":
     # Run FastAPI server
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=settings.APP_REST_PORT,
+        port=settings.HTTP_PORT,
         reload=True,
         log_level="info"
     )
