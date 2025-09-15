@@ -64,3 +64,4 @@ pre-commit==4.0.1
 # Mock servers
 responses==0.25.3
 pytest-httpx==0.35.0
+strawberry-graphql[fastapi]==0.282.0

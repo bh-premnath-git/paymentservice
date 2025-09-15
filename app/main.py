@@ -2,18 +2,22 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
+from functools import lru_cache
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from grpc import aio as grpc_aio
 from grpc_reflection.v1alpha import reflection
 from redis.asyncio import Redis
 
 from config import get_settings
+from adapters import PaymentAdapter
+from adapters.custom import CustomAdapter
+from adapters.stripe import StripeAdapter
 
 # Generated protobuf files
 from payment.v1 import payment_pb2, payment_pb2_grpc
@@ -36,24 +40,31 @@ logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 settings = get_settings()
 
 
+@lru_cache(maxsize=1)
+def get_provider() -> PaymentAdapter:
+    if settings.STRIPE_SECRET_KEY and settings.STRIPE_WEBHOOK_SECRET:
+        return StripeAdapter(
+            settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET
+        )
+    return CustomAdapter()
+
+
 async def serve_grpc(
     sessionmaker: async_sessionmaker,
     redis: Redis | None,
-    bind: str = "0.0.0.0:50051",
+    bind: str | None = None,
     started_event: asyncio.Event | None = None,
 ) -> None:
+    bind = bind or f"0.0.0.0:{settings.GRPC_PORT}"
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
         PaymentServiceHandler(sessionmaker, redis), server
     )
-
-    # Enable server reflection
-    SERVICE_NAMES = (
+    service_names = (
         payment_pb2.DESCRIPTOR.services_by_name["PaymentService"].full_name,
         reflection.SERVICE_NAME,
     )
-    reflection.add_reflection_servicer(server)
-
+    reflection.enable_server_reflection(service_names, server)
     server.add_insecure_port(bind)
 
     logger.info("Starting gRPC server on %s", bind)
@@ -124,16 +135,41 @@ app.add_middleware(
 async def health_check():
     return {"status": "healthy", "service": "payment-service"}
 
+
+@app.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+    provider = get_provider()
+    payload = await request.body()
+    sig = request.headers.get("Stripe-Signature")
+    if not sig:
+        raise HTTPException(status_code=400, detail="Missing Stripe-Signature")
+    try:
+        evt = await provider.webhook_verify(payload, sig)
+    except Exception as exc:  # pragma: no cover - signature failure
+        raise HTTPException(status_code=400, detail=f"Webhook verification failed: {exc}")
+
+    etype = evt["type"]
+    _obj = evt["data"]  # noqa: F841 - placeholder for reconciliation logic
+
+    if etype == "payment_intent.succeeded":
+        pass
+    elif etype == "checkout.session.completed":
+        pass
+    elif etype == "charge.refunded":
+        pass
+
+    return {"received": True}
+
 @app.get("/")
 async def root():
-    return {"message": "Payment Service API", "grpc_port": 50051}
+    return {"message": "Payment Service API", "grpc_port": settings.GRPC_PORT}
 
 if __name__ == "__main__":
     # Run FastAPI server
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=settings.HTTP_PORT,
         reload=True,
         log_level="info"
     )
