@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Universal Proto Generation Script with Proper Cleanup
+# Universal Proto Generation Script with Enhanced Error Handling
 # Works on all systems including PEP 668 protected environments
 
 set -e
@@ -39,10 +39,111 @@ cleanup() {
     exit $exit_code
 }
 
+# Check if ensurepip is available
+check_ensurepip() {
+    if ! $PYTHON_CMD -c "import ensurepip" 2>/dev/null; then
+        echo "⚠️  ensurepip not available - cannot create virtual environment"
+        echo "🔧 Detecting system and suggesting fix..."
+        
+        if command -v apt-get >/dev/null 2>&1; then
+            PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+            echo "💡 Run: sudo apt install python${PYTHON_VERSION}-venv"
+            echo "   Then re-run this script"
+        elif command -v yum >/dev/null 2>&1; then
+            echo "💡 Run: sudo yum install python3-pip python3-venv"
+        elif command -v dnf >/dev/null 2>&1; then
+            echo "💡 Run: sudo dnf install python3-pip python3-venv"
+        elif command -v pacman >/dev/null 2>&1; then
+            echo "💡 Run: sudo pacman -S python-pip python-virtualenv"
+        else
+            echo "💡 Install python3-venv package for your distribution"
+        fi
+        return 1
+    fi
+    return 0
+}
+
+# Attempt installation via pipx
+try_pipx_install() {
+    if command -v pipx >/dev/null 2>&1; then
+        echo "📦 Using pipx to manage grpcio-tools..."
+        
+        if ! pipx list | grep -q grpcio-tools; then
+            echo "📦 Installing grpcio-tools via pipx..."
+            if pipx install grpcio-tools; then
+                echo "✅ grpcio-tools installed via pipx"
+            else
+                echo "⚠️  pipx installation failed"
+                return 1
+            fi
+        fi
+        
+        # Find pipx venv path
+        PIPX_VENV_PATH=""
+        if [ -d "$HOME/.local/share/pipx/venvs/grpcio-tools" ]; then
+            PIPX_VENV_PATH="$HOME/.local/share/pipx/venvs/grpcio-tools"
+        elif [ -d "$HOME/.local/pipx/venvs/grpcio-tools" ]; then
+            PIPX_VENV_PATH="$HOME/.local/pipx/venvs/grpcio-tools"
+        fi
+        
+        if [ -n "$PIPX_VENV_PATH" ] && [ -f "$PIPX_VENV_PATH/bin/python" ]; then
+            USE_PYTHON="$PIPX_VENV_PATH/bin/python"
+            echo "✅ Using pipx-managed grpcio-tools"
+            return 0
+        else
+            echo "⚠️  Could not locate pipx grpcio-tools installation"
+            return 1
+        fi
+    else
+        return 1
+    fi
+}
+
+# Attempt system installation with override
+try_system_install() {
+    echo "📦 Attempting system installation with override..."
+    
+    # First check if pip is available
+    if ! $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
+        echo "⚠️  pip not available, trying to install..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y python3-pip
+        fi
+    fi
+    
+    # Try different installation approaches
+    local install_success=false
+    
+    # Method 1: --break-system-packages
+    if $PYTHON_CMD -m pip install --user --break-system-packages --quiet protobuf==$PROTOBUF_VERSION grpcio-tools==$GRPC_TOOLS_VERSION 2>/dev/null; then
+        install_success=true
+    # Method 2: Without --break-system-packages (older systems)
+    elif $PYTHON_CMD -m pip install --user --quiet protobuf==$PROTOBUF_VERSION grpcio-tools==$GRPC_TOOLS_VERSION 2>/dev/null; then
+        install_success=true
+    # Method 3: System packages (Ubuntu/Debian)
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo "📦 Trying system package installation..."
+        if sudo apt-get install -y python3-grpcio-tools python3-protobuf; then
+            install_success=true
+        fi
+    fi
+    
+    if [ "$install_success" = true ]; then
+        if $PYTHON_CMD -c "import grpc_tools.protoc" 2>/dev/null; then
+            echo "✅ grpcio-tools installed successfully"
+            USE_PYTHON="$PYTHON_CMD"
+            return 0
+        fi
+    fi
+    
+    echo "⚠️  System installation failed"
+    return 1
+}
+
 # Set up trap for cleanup on script exit
 trap cleanup EXIT INT TERM
 
-echo "🔍 Proto Generation"
+echo "🔍 Proto Generation Enhanced"
 echo "📁 Protos: $PROTOS_DIR"
 echo "📁 Output: $OUTPUT_DIR"
 echo "🔧 Protobuf version: $PROTOBUF_VERSION"
@@ -90,83 +191,111 @@ elif [ -f "$VENV_DIR/bin/python" ] && [ -f "$VENV_DIR/bin/activate" ]; then
         rm -rf "$VENV_DIR"
         echo "🔄 Will create fresh virtual environment..."
     fi
-
-# Method 3: Try creating virtual environment
 fi
 
+# Method 3: Try creating virtual environment with enhanced error handling
 if [ -z "$USE_PYTHON" ]; then
-    # Check if we can create venv
-    if $PYTHON_CMD -m venv --help >/dev/null 2>&1; then
-        echo "📦 Creating virtual environment..."
+    echo "🔧 Attempting to create virtual environment..."
+    
+    # Check venv module availability
+    if ! $PYTHON_CMD -m venv --help >/dev/null 2>&1; then
+        echo "🔧 python-venv module not found"
         
-        # Clean any existing broken venv
-        rm -rf "$VENV_DIR" 2>/dev/null || true
-        
-        # Create new venv
-        $PYTHON_CMD -m venv "$VENV_DIR"
-        
-        if [ -f "$VENV_DIR/bin/activate" ]; then
-            source "$VENV_DIR/bin/activate"
-            VENV_ACTIVATED=true
-            
-            echo "📦 Installing grpcio-tools in virtual environment..."
-            python -m pip install --quiet --upgrade pip
-            python -m pip install --quiet protobuf==$PROTOBUF_VERSION grpcio-tools==$GRPC_TOOLS_VERSION
-            
-            if python -c "import grpc_tools.protoc" 2>/dev/null; then
-                echo "✅ Virtual environment created successfully"
-                USE_PYTHON="python"
+        # Try to install python3-venv on supported systems
+        if command -v apt-get >/dev/null 2>&1; then
+            echo "🔧 Attempting to install python3-venv..."
+            if sudo apt-get update && sudo apt-get install -y python3-venv; then
+                echo "✅ python3-venv installed successfully"
             else
-                echo "❌ Failed to install grpcio-tools in venv"
-                deactivate
-                VENV_ACTIVATED=false
+                echo "⚠️  Could not auto-install python3-venv"
+            fi
+        fi
+        
+        # Re-check after potential installation
+        if ! $PYTHON_CMD -m venv --help >/dev/null 2>&1; then
+            echo "⚠️  venv module still not available, trying alternatives..."
+        fi
+    fi
+    
+    # Check ensurepip availability before creating venv
+    if $PYTHON_CMD -m venv --help >/dev/null 2>&1; then
+        if ! check_ensurepip; then
+            echo "❌ Cannot create virtual environment due to missing ensurepip"
+            echo "🔄 Trying alternative installation methods..."
+        else
+            echo "📦 Creating virtual environment..."
+            
+            # Clean any existing broken venv
+            rm -rf "$VENV_DIR" 2>/dev/null || true
+            
+            # Create new venv
+            if $PYTHON_CMD -m venv "$VENV_DIR"; then
+                if [ -f "$VENV_DIR/bin/activate" ]; then
+                    source "$VENV_DIR/bin/activate"
+                    VENV_ACTIVATED=true
+                    
+                    echo "📦 Installing grpcio-tools in virtual environment..."
+                    python -m pip install --quiet --upgrade pip
+                    
+                    if python -m pip install --quiet protobuf==$PROTOBUF_VERSION grpcio-tools==$GRPC_TOOLS_VERSION; then
+                        if python -c "import grpc_tools.protoc" 2>/dev/null; then
+                            echo "✅ Virtual environment created successfully"
+                            USE_PYTHON="python"
+                        else
+                            echo "⚠️  grpcio-tools import failed after installation"
+                            deactivate
+                            VENV_ACTIVATED=false
+                        fi
+                    else
+                        echo "⚠️  Failed to install grpcio-tools in venv"
+                        deactivate
+                        VENV_ACTIVATED=false
+                    fi
+                else
+                    echo "⚠️  Virtual environment creation failed"
+                fi
+            else
+                echo "⚠️  Failed to create virtual environment"
+            fi
+        fi
+    fi
+    
+    # Method 4: Try pipx if venv failed
+    if [ -z "$USE_PYTHON" ]; then
+        if try_pipx_install; then
+            echo "✅ Using pipx installation"
+        else
+            # Method 5: Try system installation with override
+            if try_system_install; then
+                echo "✅ Using system installation"
+            else
+                echo "❌ All installation methods failed"
+                echo ""
+                echo "🔧 Manual installation options:"
+                echo "1. sudo apt install python3-venv python3-pip  # For Debian/Ubuntu"
+                echo "2. sudo apt install python3-grpcio-tools      # System-wide installation"
+                echo "3. pipx install grpcio-tools                  # Isolated installation"
+                echo "4. python3 -m pip install --user --break-system-packages grpcio-tools"
+                echo ""
+                echo "For Debian/Ubuntu specifically:"
+                PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.12")
+                echo "   sudo apt install python${PYTHON_VERSION}-venv"
                 exit 1
             fi
-        else
-            echo "❌ Failed to create virtual environment"
         fi
-        
-    # Method 4: Try pipx
-    elif command -v pipx >/dev/null 2>&1; then
-        echo "📦 Using pipx to manage grpcio-tools..."
-        
-        if ! pipx list | grep -q grpcio-tools; then
-            echo "📦 Installing grpcio-tools via pipx..."
-            pipx install grpcio-tools
-        fi
-        
-        GRPC_TOOLS_PATH="$HOME/.local/pipx/venvs/grpcio-tools"
-        if [ -d "$GRPC_TOOLS_PATH" ]; then
-            USE_PYTHON="$GRPC_TOOLS_PATH/bin/python"
-            echo "✅ Using pipx-managed grpcio-tools"
-        else
-            echo "❌ Failed to install via pipx"
-            exit 1
-        fi
-        
-    # Method 5: Use --break-system-packages flag
-    elif $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
-        echo "📦 Installing grpcio-tools (user directory with override)..."
-        
-        $PYTHON_CMD -m pip install --user --break-system-packages --quiet protobuf==$PROTOBUF_VERSION grpcio-tools==$GRPC_TOOLS_VERSION
-        
-        if $PYTHON_CMD -c "import grpc_tools.protoc" 2>/dev/null; then
-            echo "✅ grpcio-tools installed successfully"
-            USE_PYTHON="$PYTHON_CMD"
-        else
-            echo "❌ Failed to install grpcio-tools"
-            exit 1
-        fi
-        
-    else
-        echo "❌ Cannot automatically install grpcio-tools"
-        echo ""
-        echo "Please install manually using one of these methods:"
-        echo "1. sudo apt install python3.12-venv  # Then run this script again"
-        echo "2. sudo apt install python3-grpcio-tools"
-        echo "3. pipx install grpcio-tools"
-        exit 1
     fi
+fi
+
+# Verify we have a working Python with grpcio-tools
+if [ -z "$USE_PYTHON" ]; then
+    echo "❌ No working Python environment with grpcio-tools found"
+    exit 1
+fi
+
+# Final verification
+if ! $USE_PYTHON -c "import grpc_tools.protoc" 2>/dev/null; then
+    echo "❌ grpcio-tools import verification failed"
+    exit 1
 fi
 
 # Find proto files
@@ -289,12 +418,21 @@ echo ""
 echo "💡 Usage in Python:"
 if [ "$VENV_ACTIVATED" = true ]; then
     echo "   # With virtual environment activated:"
+    echo "   source $VENV_DIR/bin/activate"
     echo "   python -c 'from your_proto_pb2 import YourMessage'"
 else
     echo "   import sys"
     echo "   sys.path.insert(0, '$OUTPUT_DIR')"
     echo "   # Then import your generated modules"
     echo "   # Example: from your_proto_pb2 import YourMessage"
+fi
+
+echo ""
+echo "🔧 Environment details:"
+echo "  • Python: $PYTHON_CMD"
+echo "  • gRPC tools: $USE_PYTHON"
+if [ "$VENV_ACTIVATED" = true ]; then
+    echo "  • Virtual env: $VENV_DIR"
 fi
 
 if [ $FAIL_COUNT -gt 0 ]; then
