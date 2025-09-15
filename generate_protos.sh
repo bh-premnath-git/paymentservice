@@ -337,7 +337,7 @@ for proto_file in "${PROTO_FILES[@]}"; do
         --proto_path="$PROTOS_DIR" \
         "$proto_file" 2>/dev/null; then
         echo "  ✅ Generated successfully"
-        ((SUCCESS_COUNT++))
+        ((SUCCESS_COUNT+=1))
     else
         echo "  ❌ Failed to generate"
         echo "  Error details:"
@@ -346,7 +346,7 @@ for proto_file in "${PROTO_FILES[@]}"; do
             --grpc_python_out="$OUTPUT_DIR" \
             --proto_path="$PROTOS_DIR" \
             "$proto_file"
-        ((FAIL_COUNT++))
+        ((FAIL_COUNT+=1))
     fi
 done
 
@@ -365,7 +365,7 @@ for dir in "${GENERATED_DIRS[@]}"; do
         init_file="$current_dir/__init__.py"
         if [ ! -f "$init_file" ]; then
             touch "$init_file"
-            ((INIT_COUNT++))
+            ((INIT_COUNT+=1))
             rel_init="${init_file#$OUTPUT_DIR/}"
             echo "  📄 Created: $rel_init"
         fi
