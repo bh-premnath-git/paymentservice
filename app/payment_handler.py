@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 import grpc
@@ -12,7 +12,7 @@ from redis.asyncio import Redis
 
 from payment.v1 import payment_pb2, payment_pb2_grpc
 from models import Payment
-from adapters.base import PaymentAdapter
+from adapters.base import PaymentAdapter, validate_currency_code, validate_amount
 from adapters.exceptions import PaymentError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,18 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
         try:
             payment_id = str(uuid.uuid4())
             created_at = datetime.now(timezone.utc)
-            amount = Decimal(request.amount)
+            raw_amount = request.amount
+
+            try:
+                amount = Decimal(raw_amount)
+            except (InvalidOperation, TypeError) as exc:
+                raise ValidationError(f"Invalid amount: {raw_amount}") from exc
+
+            if not validate_currency_code(request.currency):
+                raise ValidationError(f"Invalid currency code: {request.currency}")
+
+            if not validate_amount(amount):
+                raise ValidationError(f"Invalid amount: {raw_amount}")
 
             # Create payment via payment adapter (Stripe/Custom)
             try:
@@ -118,6 +129,11 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
             logger.info("Created payment %s", external_payment_id)
             return response
 
+        except ValidationError as e:
+            logger.warning("Validation error creating payment: %s", e)
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return payment_pb2.CreatePaymentResponse()
         except Exception as e:
             logger.exception("Error creating payment")
             context.set_code(grpc.StatusCode.INTERNAL)
