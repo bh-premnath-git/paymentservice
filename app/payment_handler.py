@@ -12,7 +12,12 @@ from redis.asyncio import Redis
 
 from payment.v1 import payment_pb2, payment_pb2_grpc
 from models import Payment
-from adapters.base import PaymentAdapter, validate_currency_code, validate_amount
+from adapters.base import (
+    PaymentAdapter,
+    validate_currency_code,
+    validate_amount,
+    normalize_payment_status,
+)
 from adapters.exceptions import PaymentError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -238,7 +243,8 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
                     context.set_details(f"Unknown action: {action}")
                     return payment_pb2.ProcessPaymentResponse()
 
-                new_status = adapter_result.get("status", action + "d")
+                raw_status = adapter_result.get("status", action + "d")
+                new_status = normalize_payment_status(raw_status)
                 logger.info(f"Payment {payment_id} {action} via adapter: {new_status}")
 
             except PaymentError as e:
