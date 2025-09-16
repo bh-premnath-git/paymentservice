@@ -2,7 +2,7 @@ import os
 import sys
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -21,7 +21,9 @@ async def test_metadata_persistence():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
-    handler = PaymentServiceHandler(sessionmaker)
+    payment_adapter = AsyncMock()
+    payment_adapter.create_payment.return_value = {"status": "created"}
+    handler = PaymentServiceHandler(sessionmaker, payment_adapter)
 
     metadata = {"order_id": "ABC123", "note": "test"}
     request = payment_pb2.CreatePaymentRequest(

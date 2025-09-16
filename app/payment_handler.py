@@ -98,22 +98,24 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
             if self._redis is not None:
                 try:
                     await self._redis.setex(
-                        self._cache_key(payment_id),
+                        self._cache_key(external_payment_id),
                         self._CACHE_TTL,
                         json.dumps(
                             {
-                                "payment_id": payment_id,
+                                "payment_id": external_payment_id,
                                 "amount": str(amount),
                                 "currency": request.currency,
-                                "status": "created",
+                                "status": adapter_status,
                                 "created_at": created_at.isoformat(),
                             }
                         ),
                     )
                 except Exception as exc:  # pragma: no cover - cache failure
-                    logger.warning("Failed to cache payment %s: %s", payment_id, exc)
+                    logger.warning(
+                        "Failed to cache payment %s: %s", external_payment_id, exc
+                    )
 
-            logger.info("Created payment %s", payment_id)
+            logger.info("Created payment %s", external_payment_id)
             return response
 
         except Exception as e:
