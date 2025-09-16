@@ -1,10 +1,12 @@
 """Example custom payment processor adapter."""
 
+import json
+from json import JSONDecodeError
 from decimal import Decimal
 from typing import Any, Dict
-import json
 
 from ..base import PaymentAdapter
+from ..exceptions import WebhookError
 
 
 class CustomAdapter(PaymentAdapter):
@@ -14,6 +16,17 @@ class CustomAdapter(PaymentAdapter):
     bespoke gateway.  It mirrors the ``PaymentAdapter`` interface and returns
     predictable mock responses suitable for testing and local development.
     """
+
+    def __init__(self, expected_signature: str = "test_signature") -> None:
+        """Create a CustomAdapter.
+
+        Args:
+            expected_signature: Signature header value considered valid.  This
+                keeps webhook verification deterministic for tests while still
+                exercising signature handling logic.
+        """
+        super().__init__()
+        self.expected_signature = expected_signature
 
     async def create_payment(
         self, amount: Decimal, currency: str, **kwargs: Any
@@ -37,7 +50,23 @@ class CustomAdapter(PaymentAdapter):
     async def webhook_verify(
         self, payload: bytes, sig_header: str
     ) -> Dict[str, Any]:
-        data = json.loads(payload.decode())
+        if not sig_header:
+            raise WebhookError("Missing webhook signature header")
+
+        if sig_header != self.expected_signature:
+            raise WebhookError("Invalid webhook signature")
+
+        try:
+            decoded_payload = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise WebhookError("Invalid webhook payload encoding") from exc
+
+        try:
+            data = json.loads(decoded_payload)
+        except JSONDecodeError as exc:
+            raise WebhookError("Invalid webhook payload") from exc
+
         return {"type": data.get("type", "unknown"), "data": data.get("data", {})}
+
 
 __all__ = ["CustomAdapter"]

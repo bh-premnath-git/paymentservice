@@ -220,8 +220,8 @@ class TestAdapterErrorHandling:
         """Test webhook verification with invalid JSON raises appropriate error."""
         invalid_payload = b'invalid json data'
         sig_header = 'test_signature'
-        
-        with pytest.raises(Exception):  # Should raise some form of error
+
+        with pytest.raises(WebhookError):
             await custom_adapter.webhook_verify(invalid_payload, sig_header)
     
     def test_exception_hierarchy_completeness(self):
