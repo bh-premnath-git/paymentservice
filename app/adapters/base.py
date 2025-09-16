@@ -4,6 +4,18 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from decimal import Decimal
 
+from .exceptions import (
+    PaymentError,
+    ValidationError,
+    InsufficientFundsError,
+    PaymentNotFoundError,
+    PaymentProcessingError,
+    RefundError,
+    WebhookError,
+    RateLimitError,
+    AuthenticationError,
+)
+
 
 # ==================== Base Adapter ====================
 
@@ -26,6 +38,13 @@ class PaymentAdapter(ABC):
             
         Returns:
             Payment details including ID and status
+            
+        Raises:
+            ValidationError: If input parameters are invalid
+            InsufficientFundsError: If payment fails due to insufficient funds
+            PaymentProcessingError: If payment processing fails
+            AuthenticationError: If authentication with payment processor fails
+            RateLimitError: If API rate limits are exceeded
         """
         pass
     
@@ -43,6 +62,12 @@ class PaymentAdapter(ABC):
             
         Returns:
             Updated payment details
+            
+        Raises:
+            PaymentNotFoundError: If payment ID is not found
+            PaymentProcessingError: If capture fails
+            ValidationError: If payment cannot be captured (wrong status)
+            AuthenticationError: If authentication with payment processor fails
         """
         pass
     
@@ -60,6 +85,12 @@ class PaymentAdapter(ABC):
             
         Returns:
             Refund details
+            
+        Raises:
+            PaymentNotFoundError: If payment ID is not found
+            RefundError: If refund processing fails
+            ValidationError: If refund parameters are invalid
+            AuthenticationError: If authentication with payment processor fails
         """
         pass
     
@@ -77,6 +108,12 @@ class PaymentAdapter(ABC):
             
         Returns:
             Updated payment details
+            
+        Raises:
+            PaymentNotFoundError: If payment ID is not found
+            PaymentProcessingError: If cancellation fails
+            ValidationError: If payment cannot be cancelled (wrong status)
+            AuthenticationError: If authentication with payment processor fails
         """
         pass
     
@@ -96,7 +133,8 @@ class PaymentAdapter(ABC):
             Parsed and verified webhook data
             
         Raises:
-            WebhookError: If verification fails
+            WebhookError: If verification fails or payload is invalid
+            ValidationError: If signature or payload format is invalid
         """
         pass
     
@@ -111,6 +149,11 @@ class PaymentAdapter(ABC):
             
         Returns:
             Payment status and details
+            
+        Raises:
+            PaymentNotFoundError: If payment ID is not found
+            PaymentProcessingError: If status retrieval fails
+            AuthenticationError: If authentication with payment processor fails
         """
         raise NotImplementedError("Payment status check not implemented")
     
@@ -127,6 +170,12 @@ class PaymentAdapter(ABC):
             
         Returns:
             List of payment records
+            
+        Raises:
+            ValidationError: If filter parameters are invalid
+            PaymentProcessingError: If listing fails
+            AuthenticationError: If authentication with payment processor fails
+            RateLimitError: If API rate limits are exceeded
         """
         raise NotImplementedError("Payment listing not implemented")
 
@@ -151,7 +200,19 @@ class FXRateService(ABC):
             amount: Optional amount for tiered rates
             
         Returns:
-            Exchange rate details including rate and fees
+            Dictionary containing rate information:
+            {
+                'rate': Decimal,
+                'from_currency': str,
+                'to_currency': str,
+                'timestamp': datetime,
+                'expires_at': Optional[datetime]
+            }
+            
+        Raises:
+            ValidationError: If currency codes are invalid
+            PaymentProcessingError: If rate retrieval fails
+            RateLimitError: If API rate limits are exceeded
         """
         pass
     
@@ -160,8 +221,7 @@ class FXRateService(ABC):
         self,
         amount: Decimal,
         from_currency: str,
-        to_currency: str,
-        include_fees: bool = True
+        to_currency: str
     ) -> Dict[str, Any]:
         """Convert amount between currencies.
         
@@ -169,28 +229,82 @@ class FXRateService(ABC):
             amount: Amount to convert
             from_currency: Source currency code
             to_currency: Target currency code
-            include_fees: Whether to include conversion fees
             
         Returns:
-            Converted amount and rate details
+            Dictionary containing conversion details:
+            {
+                'original_amount': Decimal,
+                'converted_amount': Decimal,
+                'rate': Decimal,
+                'from_currency': str,
+                'to_currency': str,
+                'timestamp': datetime
+            }
+            
+        Raises:
+            ValidationError: If currency codes or amount are invalid
+            PaymentProcessingError: If conversion fails
         """
         pass
+
+
+# ==================== Utility Functions ====================
+
+def validate_currency_code(currency: str) -> bool:
+    """Validate ISO 4217 currency code format.
     
-    @abstractmethod
-    async def lock_rate(
-        self,
-        from_currency: str,
-        to_currency: str,
-        duration_minutes: int = 60
-    ) -> Dict[str, Any]:
-        """Lock an exchange rate for a specified duration.
+    Args:
+        currency: Currency code to validate
         
-        Args:
-            from_currency: Source currency code
-            to_currency: Target currency code
-            duration_minutes: Lock duration in minutes
-            
-        Returns:
-            Rate lock details including ID and expiration
-        """
-        pass
+    Returns:
+        True if valid, False otherwise
+    """
+    if not isinstance(currency, str):
+        return False
+    return len(currency) == 3 and currency.isalpha() and currency.isupper()
+
+
+def validate_amount(amount: Decimal) -> bool:
+    """Validate payment amount.
+    
+    Args:
+        amount: Amount to validate
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not isinstance(amount, Decimal):
+        return False
+    return amount > 0 and amount.is_finite()
+
+
+def normalize_payment_status(status: str) -> str:
+    """Normalize payment status across different processors.
+    
+    Args:
+        status: Raw status from payment processor
+        
+    Returns:
+        Normalized status string
+    """
+    status_mapping = {
+        # Common statuses
+        'pending': 'pending',
+        'processing': 'processing', 
+        'succeeded': 'completed',
+        'completed': 'completed',
+        'failed': 'failed',
+        'canceled': 'cancelled',
+        'cancelled': 'cancelled',
+        'refunded': 'refunded',
+        'partially_refunded': 'partially_refunded',
+        
+        # Stripe specific
+        'requires_payment_method': 'pending',
+        'requires_confirmation': 'pending',
+        'requires_action': 'pending',
+        'requires_capture': 'authorized',
+        'payment_failed': 'failed',
+    }
+    
+    return status_mapping.get(status.lower(), status.lower())

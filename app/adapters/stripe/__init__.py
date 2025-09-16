@@ -22,6 +22,11 @@ from ..exceptions import (
     ValidationError,
     InsufficientFundsError,
     PaymentNotFoundError,
+    PaymentProcessingError,
+    RefundError,
+    WebhookError,
+    RateLimitError as PaymentRateLimitError,
+    AuthenticationError as PaymentAuthenticationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -289,6 +294,50 @@ class StripeAdapter(PaymentAdapter):
             if isinstance(e, CardError):
                 raise InsufficientFundsError(str(e))
             raise PaymentError(f"Failed to create payment: {str(e)}")
+
+    async def capture_payment(
+        self, 
+        payment_id: str, 
+        **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Capture a previously authorized payment.
+        
+        Args:
+            payment_id: Unique payment identifier (PaymentIntent ID)
+            **kwargs: Additional processor-specific parameters
+            
+        Returns:
+            Updated payment details
+            
+        Raises:
+            PaymentNotFoundError: If payment ID is not found
+            PaymentProcessingError: If capture fails
+            ValidationError: If payment cannot be captured (wrong status)
+            AuthenticationError: If authentication with payment processor fails
+        """
+        try:
+            payment_intent = stripe.PaymentIntent.capture(payment_id)
+            
+            logger.info(f"Captured payment {payment_intent.id}")
+            
+            return {
+                "id": payment_intent.id,
+                "status": payment_intent.status,
+                "amount": payment_intent.amount,
+                "currency": payment_intent.currency,
+                "captured_at": payment_intent.created,
+                "metadata": payment_intent.metadata,
+            }
+            
+        except StripeError as e:
+            logger.error(f"Payment capture failed: {e}")
+            if e.http_status == 404:
+                raise PaymentNotFoundError(f"Payment {payment_id} not found")
+            elif isinstance(e, InvalidRequestError):
+                raise ValidationError(f"Payment cannot be captured: {str(e)}")
+            elif isinstance(e, AuthenticationError):
+                raise PaymentAuthenticationError(f"Authentication failed: {str(e)}")
+            raise PaymentProcessingError(f"Failed to capture payment: {str(e)}")
 
     async def confirm_payment(
         self,
