@@ -140,9 +140,25 @@ class TestCustomAdapter:
         """Test webhook verification with invalid JSON."""
         payload = b'invalid json'
         sig_header = 'test_signature'
-        
-        with pytest.raises(Exception):  # Should raise JSON decode error
+
+        with pytest.raises(WebhookError):
             await adapter.webhook_verify(payload, sig_header)
+
+    @pytest.mark.asyncio
+    async def test_webhook_verify_missing_signature(self, adapter):
+        """Test webhook verification fails when signature header missing."""
+        payload = b'{"type": "payment.completed", "data": {"id": "pay_123"}}'
+
+        with pytest.raises(WebhookError):
+            await adapter.webhook_verify(payload, "")
+
+    @pytest.mark.asyncio
+    async def test_webhook_verify_invalid_signature(self, adapter):
+        """Test webhook verification fails when signature header invalid."""
+        payload = b'{"type": "payment.completed", "data": {"id": "pay_123"}}'
+
+        with pytest.raises(WebhookError):
+            await adapter.webhook_verify(payload, "wrong_signature")
 
     @pytest.mark.asyncio
     async def test_get_payment_status_not_implemented(self, adapter):
@@ -257,18 +273,22 @@ class TestAdapterFactory:
             'STRIPE_SECRET_KEY': 'sk_test_123',
             'STRIPE_WEBHOOK_SECRET': 'whsec_123'
         }):
-            from main import get_provider
+            from main import get_provider, settings
+            settings.STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+            settings.STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
             get_provider.cache_clear()  # Clear LRU cache
-            
+
             provider = get_provider()
             # Should be StripeAdapter when keys are available
             assert provider.__class__.__name__ == 'StripeAdapter'
-        
+
         # Test without environment variables
         with patch.dict(os.environ, {}, clear=True):
-            from main import get_provider
+            from main import get_provider, settings
+            settings.STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+            settings.STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
             get_provider.cache_clear()  # Clear LRU cache
-            
+
             provider = get_provider()
             # Should be CustomAdapter when no keys
             assert isinstance(provider, CustomAdapter)
