@@ -12,6 +12,8 @@ from redis.asyncio import Redis
 
 from payment.v1 import payment_pb2, payment_pb2_grpc
 from models import Payment
+from adapters.base import PaymentAdapter
+from adapters.exceptions import PaymentError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -24,32 +26,62 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
     def __init__(
         self,
         sessionmaker: async_sessionmaker[AsyncSession],
+        payment_adapter: PaymentAdapter,
         redis: Optional[Redis] = None,
     ):
         self._sessionmaker = sessionmaker
+        self._payment_adapter = payment_adapter
         self._redis = redis
-        logger.info("PaymentServiceHandler initialized")
+        logger.info(f"PaymentServiceHandler initialized with {payment_adapter.__class__.__name__}")
 
     @staticmethod
     def _cache_key(payment_id: str) -> str:
         return f"payment:{payment_id}"
 
     async def CreatePayment(self, request, context):
-        """Create a new payment."""
+        """Create a new payment using the configured payment adapter."""
         try:
             payment_id = str(uuid.uuid4())
             created_at = datetime.now(timezone.utc)
-
             amount = Decimal(request.amount)
 
+            # Create payment via payment adapter (Stripe/Custom)
+            try:
+                adapter_result = await self._payment_adapter.create_payment(
+                    amount=amount,
+                    currency=request.currency,
+                    customer_id=request.customer_id,
+                    payment_method=request.payment_method,
+                    description=f"Payment {payment_id}",
+                    metadata=dict(request.metadata)
+                )
+                
+                # Use adapter's payment ID and status
+                external_payment_id = adapter_result.get("id", payment_id)
+                adapter_status = adapter_result.get("status", "created")
+                
+                logger.info(f"Payment adapter created payment: {external_payment_id}")
+                
+            except PaymentError as e:
+                logger.error(f"Payment adapter failed: {e}")
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                context.set_details(f"Payment processing failed: {str(e)}")
+                return payment_pb2.CreatePaymentResponse()
+            except Exception as e:
+                logger.error(f"Unexpected payment adapter error: {e}")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(f"Payment system error: {str(e)}")
+                return payment_pb2.CreatePaymentResponse()
+
+            # Store payment in database with adapter results
             payment = Payment(
-                payment_id=payment_id,
+                payment_id=external_payment_id,  # Use adapter's ID
                 amount=amount,
                 currency=request.currency,
                 customer_id=request.customer_id,
                 payment_method=request.payment_method,
                 metadata_=dict(request.metadata),
-                status="created",
+                status=adapter_status,  # Use adapter's status
                 created_at=created_at,
             )
 
@@ -58,8 +90,8 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
                 await session.commit()
 
             response = payment_pb2.CreatePaymentResponse(
-                payment_id=payment_id,
-                status="created",
+                payment_id=external_payment_id,
+                status=adapter_status,
                 created_at=created_at.isoformat(),
             )
 
@@ -161,25 +193,50 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
             return payment_pb2.ListPaymentsResponse()
 
     async def ProcessPayment(self, request, context):
-        """Process payment action."""
+        """Process payment action using payment adapter."""
         try:
             payment_id = request.payment_id
             action = request.action
-
-            status_map = {
-                "capture": "captured",
-                "refund": "refunded",
-                "cancel": "cancelled",
-            }
-            new_status = status_map.get(action, "processed")
             processed_at = datetime.now(timezone.utc)
 
+            # Get payment from database first
             async with self._sessionmaker() as session:
                 payment = await session.get(Payment, payment_id)
                 if not payment:
                     context.set_code(grpc.StatusCode.NOT_FOUND)
                     context.set_details(f"Payment not found: {payment_id}")
                     return payment_pb2.ProcessPaymentResponse()
+
+            # Process action via payment adapter
+            try:
+                if action == "capture":
+                    adapter_result = await self._payment_adapter.capture_payment(payment_id)
+                elif action == "refund":
+                    adapter_result = await self._payment_adapter.refund_payment(payment_id)
+                elif action == "cancel":
+                    adapter_result = await self._payment_adapter.cancel_payment(payment_id)
+                else:
+                    context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                    context.set_details(f"Unknown action: {action}")
+                    return payment_pb2.ProcessPaymentResponse()
+
+                new_status = adapter_result.get("status", action + "d")
+                logger.info(f"Payment {payment_id} {action} via adapter: {new_status}")
+
+            except PaymentError as e:
+                logger.error(f"Payment adapter {action} failed: {e}")
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                context.set_details(f"Payment {action} failed: {str(e)}")
+                return payment_pb2.ProcessPaymentResponse()
+            except Exception as e:
+                logger.error(f"Unexpected payment adapter error during {action}: {e}")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details(f"Payment system error: {str(e)}")
+                return payment_pb2.ProcessPaymentResponse()
+
+            # Update database with adapter results
+            async with self._sessionmaker() as session:
+                payment = await session.get(Payment, payment_id)
                 payment.status = new_status
                 payment.processed_at = processed_at
                 await session.commit()

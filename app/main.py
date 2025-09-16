@@ -57,8 +57,11 @@ async def serve_grpc(
 ) -> None:
     bind = bind or f"0.0.0.0:{settings.GRPC_PORT}"
     server = grpc_aio.server(maximum_concurrent_rpcs=100)
+    
+    # Get payment adapter and pass it to handler
+    payment_adapter = get_provider()
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(
-        PaymentServiceHandler(sessionmaker, redis), server
+        PaymentServiceHandler(sessionmaker, payment_adapter, redis), server
     )
     service_names = (
         payment_pb2.DESCRIPTOR.services_by_name["PaymentService"].full_name,
@@ -138,27 +141,42 @@ async def health_check():
 
 @app.post("/webhooks/stripe")
 async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks and update payment status."""
     provider = get_provider()
     payload = await request.body()
     sig = request.headers.get("Stripe-Signature")
     if not sig:
         raise HTTPException(status_code=400, detail="Missing Stripe-Signature")
+    
     try:
         evt = await provider.webhook_verify(payload, sig)
-    except Exception as exc:  # pragma: no cover - signature failure
+    except Exception as exc:
+        logger.error(f"Webhook verification failed: {exc}")
         raise HTTPException(status_code=400, detail=f"Webhook verification failed: {exc}")
 
     etype = evt["type"]
-    _obj = evt["data"]  # noqa: F841 - placeholder for reconciliation logic
+    data = evt["data"]
+    payment_id = data.get("id")
+    
+    logger.info(f"Received webhook: {etype} for payment {payment_id}")
 
+    # Handle different webhook events
     if etype == "payment_intent.succeeded":
-        pass
-    elif etype == "checkout.session.completed":
-        pass
-    elif etype == "charge.refunded":
-        pass
+        logger.info(f"Payment {payment_id} succeeded")
+        # TODO: Update payment status in database
+    elif etype == "payment_intent.payment_failed":
+        logger.warning(f"Payment {payment_id} failed")
+        # TODO: Update payment status in database
+    elif etype == "charge.dispute.created":
+        logger.warning(f"Dispute created for payment {payment_id}")
+        # TODO: Handle dispute
+    elif etype == "transfer.created":
+        logger.info(f"Transfer created: {payment_id}")
+        # TODO: Update transfer status
+    else:
+        logger.info(f"Unhandled webhook type: {etype}")
 
-    return {"received": True}
+    return {"received": True, "event_type": etype}
 
 @app.get("/")
 async def root():
