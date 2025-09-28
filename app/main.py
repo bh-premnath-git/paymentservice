@@ -22,6 +22,7 @@ from adapters.stripe import StripeAdapter
 # Generated protobuf files
 from payment.v1 import payment_pb2, payment_pb2_grpc
 from payment_handler import PaymentServiceHandler
+from auth_interceptor import AuthInterceptor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -56,13 +57,21 @@ async def serve_grpc(
     started_event: asyncio.Event | None = None,
 ) -> None:
     bind = bind or f"0.0.0.0:{settings.GRPC_PORT}"
-    server = grpc_aio.server(maximum_concurrent_rpcs=100)
+    
+    # Create gRPC server with auth interceptor
+    auth_interceptor = AuthInterceptor(settings)
+    server = grpc_aio.server(
+        maximum_concurrent_rpcs=100,
+        interceptors=[auth_interceptor]
+    )
     
     # Get payment adapter and pass it to handler
     payment_adapter = get_provider()
-    payment_pb2_grpc.add_PaymentServiceServicer_to_server(
-        PaymentServiceHandler(sessionmaker, payment_adapter, redis), server
-    )
+    handler = PaymentServiceHandler(sessionmaker, payment_adapter, redis)
+    
+    # Add the service to the server
+    payment_pb2_grpc.add_PaymentServiceServicer_to_server(handler, server)
+    
     service_names = (
         payment_pb2.DESCRIPTOR.services_by_name["PaymentService"].full_name,
         reflection.SERVICE_NAME,

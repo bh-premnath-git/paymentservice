@@ -1,0 +1,198 @@
+{
+  "realm": "finstack",
+  "enabled": true,
+  "displayName": "Finstack Payment Services",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>Finstack</span></div>",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 1800,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "payment:write",
+        "description": "Can create, update and manage payments",
+        "composite": false
+      },
+      {
+        "name": "payment:read",
+        "description": "Can view and list payments",
+        "composite": false
+      },
+      {
+        "name": "payment:admin",
+        "description": "Full administrative access to payment services",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "payment:write",
+            "payment:read"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "paymentservice",
+      "name": "Payment Service API",
+      "description": "gRPC Payment Service with JWT authentication",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "your-client-secret-here",
+      "bearerOnly": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "1800",
+        "client.secret.creation.time": "1640995200",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "client_credentials.use_refresh_token": "false"
+      },
+      "redirectUris": [],
+      "webOrigins": [],
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "role_list",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "payment-webapp",
+      "name": "Payment Web Application",
+      "description": "Frontend web application for payment management",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "webapp-client-secret-here",
+      "bearerOnly": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8080"
+      ],
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true
+    }
+  ],
+  "users": [
+    {
+      "username": "payment-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Payment",
+      "lastName": "Administrator",
+      "email": "admin@finstack.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "your-password-here",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "payment:admin"
+      ],
+      "clientRoles": {
+        "paymentservice": [
+          "payment:write",
+          "payment:read"
+        ]
+      }
+    },
+    {
+      "username": "payment-user",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Payment",
+      "lastName": "User",
+      "email": "user@finstack.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-password-here",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "payment:read"
+      ],
+      "clientRoles": {
+        "paymentservice": [
+          "payment:read"
+        ]
+      }
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "payment-scope",
+      "description": "Payment service specific scopes",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "payment-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "user.attribute": "foo",
+            "access.token.claim": "true",
+            "claim.name": "payment_roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "role_list",
+    "profile",
+    "email",
+    "web-origins"
+  ],
+  "defaultOptionalClientScopes": [
+    "offline_access",
+    "address",
+    "phone",
+    "microprofile-jwt",
+    "payment-scope"
+  ]
+}

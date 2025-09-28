@@ -5,25 +5,29 @@ services:
       dockerfile: ./app/Dockerfile
       target: development
     ports:
-      - "8000:8000"  # FastAPI HTTP
-      - "50051:50051"  # gRPC
+      - "8003:8000" # FastAPI HTTP
+      - "50051:50051" # gRPC
     env_file:
       - .env
     environment:
       - ENVIRONMENT=${ENVIRONMENT}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql+asyncpg://payment:payment@host.docker.internal:5432/payment_db
       - REQUESTOR_BASE_URL=${REQUESTOR_BASE_URL}
       - REQUESTOR_MODE=${REQUESTOR_MODE}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - LOG_LEVEL=${LOG_LEVEL}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=redis://host.docker.internal:6379/0
       - ENABLE_MTLS=${ENABLE_MTLS}
       - ENABLE_AUTH_INTERCEPTOR=${ENABLE_AUTH_INTERCEPTOR}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    # volumes: # Removed - let Dockerfile handle file copying
+      # Keycloak configuration for external service
+      - KEYCLOAK_ISSUER=http://host.docker.internal:8080/realms/finstack
+      - KEYCLOAK_AUDIENCE=paymentservice
+      - KEYCLOAK_JWKS_URL=http://host.docker.internal:8080/realms/finstack/protocol/openid-connect/certs
+      # Consul configuration for external service
+      - CONSUL_URL=http://host.docker.internal:8500
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - payment-network
     restart: unless-stopped
@@ -39,7 +43,7 @@ services:
       context: .
       dockerfile: ./sandbox/requestor_mock/Dockerfile
     ports:
-      - "8001:8001"
+      - "8004:8001"
     env_file:
       - .env
     environment:
@@ -57,49 +61,12 @@ services:
       timeout: 5s
       retries: 3
 
-  postgres:
-    image: postgres:13.22-alpine3.21
-    env_file:
-      - .env
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-payment_db}
-      POSTGRES_USER: ${POSTGRES_USER:-payment}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-payment}
-      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:---encoding=UTF-8 --lc-collate=C --lc-ctype=C}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts:/docker-entrypoint-initdb.d
-    networks:
-      - payment-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-payment} -d ${POSTGRES_DB:-payment_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  redis:
-    image: redis:alpine3.22
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - payment-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
+  # Removed postgres and redis services - using external containers
 
   grpcui:
     image: fullstorydev/grpcui:latest
     ports:
-      - "8080:8080"
+      - "8005:8080"
     command:
       - -plaintext
       - -bind=0.0.0.0
@@ -113,11 +80,7 @@ services:
     profiles:
       - tools
 
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
+# Removed volumes for postgres and redis - using external containers
 
 networks:
   payment-network:

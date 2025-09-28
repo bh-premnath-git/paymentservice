@@ -19,6 +19,7 @@ from adapters.base import (
     normalize_payment_status,
 )
 from adapters.exceptions import PaymentError, ValidationError
+from auth_interceptor import requires_role
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class PaymentServiceHandler(payment_pb2_grpc.PaymentServiceServicer):
     def _cache_key(payment_id: str) -> str:
         return f"payment:{payment_id}"
 
+    @requires_role('payment:write')
     async def CreatePayment(self, request, context):
         """Create a new payment using the configured payment adapter."""
         try:
